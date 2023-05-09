@@ -7,6 +7,7 @@ import android.media.MediaMetadataRetriever
 import android.media.ThumbnailUtils
 import android.net.Uri
 import android.provider.MediaStore
+import android.util.Log
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.embedding.engine.plugins.activity.ActivityAware
 import io.flutter.embedding.engine.plugins.activity.ActivityPluginBinding
@@ -31,6 +32,9 @@ private const val EVENTS_CHANNEL_TEXT = "receive_sharing_intent/events-text"
 class ReceiveSharingIntentPlugin : FlutterPlugin, ActivityAware, MethodCallHandler,
         EventChannel.StreamHandler, NewIntentListener {
 
+    //private var TAG: String = javaClass.simpleName 
+    private var TAG: String = "Webdazer0"
+
     private var initialMedia: JSONArray? = null
     private var latestMedia: JSONArray? = null
 
@@ -45,12 +49,11 @@ class ReceiveSharingIntentPlugin : FlutterPlugin, ActivityAware, MethodCallHandl
 
     private fun setupCallbackChannels(binaryMessenger: BinaryMessenger) {
         val mChannel = MethodChannel(binaryMessenger, MESSAGES_CHANNEL)
-        mChannel.setMethodCallHandler(this)
-
         val eChannelMedia = EventChannel(binaryMessenger, EVENTS_CHANNEL_MEDIA)
-        eChannelMedia.setStreamHandler(this)
-
         val eChannelText = EventChannel(binaryMessenger, EVENTS_CHANNEL_TEXT)
+
+        mChannel.setMethodCallHandler(this)
+        eChannelMedia.setStreamHandler(this)
         eChannelText.setStreamHandler(this)
     }
 
@@ -110,25 +113,44 @@ class ReceiveSharingIntentPlugin : FlutterPlugin, ActivityAware, MethodCallHandl
         }
     }
 
-    private fun handleIntent(intent: Intent, initial: Boolean) {
-        when {
-            (intent.type?.startsWith("text") != true)
-                    && (intent.action == Intent.ACTION_SEND
-                    || intent.action == Intent.ACTION_SEND_MULTIPLE) -> { // Sharing images or videos
+    private  fun logger(value: String) : Unit {
+        Log.i(TAG, value)
+    }
 
+    private fun handleIntent(intent: Intent, initial: Boolean) {
+        val type = intent.type ?: return // MimeType
+        logger("[MIME] =>: $type")
+//        logger("[intent] =>: ${intent.toString()}")
+        val hasText = intent.getStringExtra(Intent.EXTRA_TEXT) != null
+
+        val isOnlyActionSend: Boolean = intent.action == Intent.ACTION_SEND
+        val isActionSend: Boolean = intent.action == Intent.ACTION_SEND || intent.action == Intent.ACTION_SEND_MULTIPLE
+        val isActionView: Boolean = intent.action == Intent.ACTION_VIEW
+//        val isVCard = type.contains("vcard") // text/x-vcard
+//        val isTypeVideo = type.startsWith("video")
+//        val isTypeImage = type.startsWith("image")
+
+//        val list = intent.extras?.keySet()?.map { it to (intent.extras?.get(it) ?: "[-]")  }
+//        logger("[size]: ${list?.size}")
+//        logger("[extras]: ${list?.toString()}")
+
+
+
+
+        when {
+            !hasText && isActionSend -> { // Sharing images or videos
                 val value = getMediaUris(intent)
                 if (initial) initialMedia = value
                 latestMedia = value
                 eventSinkMedia?.success(latestMedia?.toString())
             }
-            (intent.type == null || intent.type?.startsWith("text") == true)
-                    && intent.action == Intent.ACTION_SEND -> { // Sharing text
+            hasText && isOnlyActionSend -> { // Sharing text
                 val value = intent.getStringExtra(Intent.EXTRA_TEXT)
                 if (initial) initialText = value
                 latestText = value
                 eventSinkText?.success(latestText)
             }
-            intent.action == Intent.ACTION_VIEW -> { // Opening URL
+            isActionView -> { // Opening URL
                 val value = intent.dataString
                 if (initial) initialText = value
                 latestText = value
@@ -144,17 +166,20 @@ class ReceiveSharingIntentPlugin : FlutterPlugin, ActivityAware, MethodCallHandl
             Intent.ACTION_SEND -> {
                 val uri = intent.getParcelableExtra<Uri>(Intent.EXTRA_STREAM)
                 val path = uri?.let{ FileDirectory.getAbsolutePath(applicationContext, it) }
+                logger("$path")
+
                 if (path != null) {
                     val type = getMediaType(path)
+                    logger("o=> $type")
                     val thumbnail = getThumbnail(path, type)
                     val duration = getDuration(path, type)
-                    JSONArray().put(
-                            JSONObject()
-                                    .put("path", path)
-                                    .put("type", type.ordinal)
-                                    .put("thumbnail", thumbnail)
-                                    .put("duration", duration)
-                    )
+                    val jsonObject = JSONObject()
+                            .put("path", path)
+                            .put("type", type.ordinal)
+                            .put("thumbnail", thumbnail)
+                            .put("duration", duration)
+
+                    JSONArray().put(jsonObject)
                 } else null
             }
             Intent.ACTION_SEND_MULTIPLE -> {
