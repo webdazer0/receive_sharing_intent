@@ -116,13 +116,27 @@ class ReceiveSharingIntentPlugin : FlutterPlugin, ActivityAware, MethodCallHandl
     private  fun logger(value: String) : Unit {
         Log.i(TAG, value)
     }
+    private  fun containsExtraStream(intent: Intent) : Boolean {
+        return when (intent.action) {
+            Intent.ACTION_SEND -> {
+                val uri = intent.getParcelableExtra<Uri>(Intent.EXTRA_STREAM)
+//                infoFromUri(uri)
+                return uri != null
+            }
+            Intent.ACTION_SEND_MULTIPLE -> {
+                val uriList = intent.getParcelableArrayListExtra<Uri>(Intent.EXTRA_STREAM)
+                return uriList != null
+            }
+            else -> false
+        }
+    }
 
     private fun handleIntent(intent: Intent, initial: Boolean) {
         val type = intent.type ?: return // MimeType
         logger("[MIME] =>: $type")
-//        logger("[intent] =>: ${intent.toString()}")
+//        infoFromIntent(intent)
         val hasText = intent.getStringExtra(Intent.EXTRA_TEXT) != null
-
+        val hasExtraStream = containsExtraStream(intent)
         val isOnlyActionSend: Boolean = intent.action == Intent.ACTION_SEND
         val isActionSend: Boolean = intent.action == Intent.ACTION_SEND || intent.action == Intent.ACTION_SEND_MULTIPLE
         val isActionView: Boolean = intent.action == Intent.ACTION_VIEW
@@ -130,15 +144,8 @@ class ReceiveSharingIntentPlugin : FlutterPlugin, ActivityAware, MethodCallHandl
 //        val isTypeVideo = type.startsWith("video")
 //        val isTypeImage = type.startsWith("image")
 
-//        val list = intent.extras?.keySet()?.map { it to (intent.extras?.get(it) ?: "[-]")  }
-//        logger("[size]: ${list?.size}")
-//        logger("[extras]: ${list?.toString()}")
-
-
-
-
         when {
-            !hasText && isActionSend -> { // Sharing images or videos
+            isActionSend && hasExtraStream -> { // Sharing images or videos
                 val value = getMediaUris(intent)
                 if (initial) initialMedia = value
                 latestMedia = value
@@ -232,6 +239,18 @@ class ReceiveSharingIntentPlugin : FlutterPlugin, ActivityAware, MethodCallHandl
         val duration = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull()
         retriever.release()
         return duration
+    }
+
+    private  fun infoFromIntent(intent: Intent) : Unit {
+        logger("[intent] =>: ${intent.toString()}")
+        val list = intent.extras?.keySet()?.map { it to (intent.extras?.get(it) ?: "[-]")  }
+        logger("[extras] ${list?.size}: ${list?.toString()}")
+    }
+
+    private  fun infoFromUri(uri: Uri) : Unit {
+        val path = uri?.let{ FileDirectory.getAbsolutePath(applicationContext, it) }
+        logger("[SEND_STREAM:uri]: | ${uri != null} ${uri.toString()}")
+        logger("[SEND_STREAM:path]: | $path")
     }
 
     enum class MediaType {
