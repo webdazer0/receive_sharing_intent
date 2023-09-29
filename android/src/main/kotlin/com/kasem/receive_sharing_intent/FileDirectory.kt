@@ -107,6 +107,12 @@ object FileDirectory {
                 cursor?.close()
             }
 
+            if (targetFile != null && targetFile.extension.isEmpty()) {
+                val mimeType = context.contentResolver.getType(uri)
+                val type = MimeTypeMap.getSingleton().getExtensionFromMimeType(mimeType)
+                targetFile = File(context.cacheDir, "${targetFile.nameWithoutExtension}.$type")
+            }
+
             if (targetFile == null) {
                 val mimeType = context.contentResolver.getType(uri)
                 val prefix = with(mimeType ?: "") {
